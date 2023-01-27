@@ -1,21 +1,45 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.0;
 
-import {BN254EncryptionOracle as Oracle} from "./medusa/src/BN254EncryptionOracle.sol";
-import {IEncryptionClient, Ciphertext} from "./medusa/src/EncryptionOracle.sol";
-import {G1Point} from "./medusa/src/Bn128.sol";
-import "./medusa/src/MedusaFans.sol";
+import {BN254EncryptionOracle as Oracle} from "./medusa/BN254EncryptionOracle.sol";
+import {IEncryptionClient, Ciphertext} from "./medusa/EncryptionOracle.sol";
+import {G1Point} from "./medusa/Bn128.sol";
+import {PullPayment} from "@openzeppelin/contracts/security/PullPayment.sol";
+// import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
-contract PrivateDoc is IEncryptionClient {
-    /// the address of the Medusa oracle
+error CallbackNotAuthorized();
+error ListingDoesNotExist();
+error InsufficentFunds();
+
+struct Listing {
+    address seller;
+    uint256 price;
+    string uri;
+}
+
+contract PrivateDoc is IEncryptionClient, PullPayment {
+    /// @notice The Encryption Oracle Instance
     Oracle public oracle;
+    address public nft;
 
-    /// mapping recording the price of each item referenced by its cipher ID
-    mapping(uint256 => uint256) itemToPrice;
+    /// @notice A mapping from cipherId to listing
+    mapping(uint256 => Listing) public listings;
 
-    constructor(Oracle _oracle) {
-        oracle = _oracle;
-    }
+    event ListingDecryption(uint256 indexed requestId, Ciphertext ciphertext);
+    event NewListing(
+        address indexed seller,
+        uint256 indexed cipherId,
+        string name,
+        string description,
+        uint256 price,
+        string uri
+    );
+    event NewSale(
+        address indexed buyer,
+        address indexed seller,
+        uint256 requestId,
+        uint256 cipherId
+    );
 
     modifier onlyOracle() {
         if (msg.sender != address(oracle)) {
@@ -24,46 +48,76 @@ contract PrivateDoc is IEncryptionClient {
         _;
     }
 
-    /// One calls this method to submit a a new entry which is encrypted
-    /// towards Medusa. The `submitCiphertext()` call will check if the
-    /// ciphertext is valid and notify the Medusa network.
-    function submitEntry(
+    constructor(Oracle _oracle, address _nft) {
+        oracle = _oracle;
+        nft = _nft;
+    }
+
+    /// @notice Create a new listing
+    /// @dev Submits a ciphertext to the oracle, stores a listing, and emits an event
+    /// @return cipherId The id of the ciphertext associated with the new listing
+    function createListing(
         Ciphertext calldata cipher,
-        uint256 price
+        string calldata name,
+        string calldata description,
+        uint256 price,
+        string calldata uri
     ) external returns (uint256) {
         uint256 cipherId = oracle.submitCiphertext(cipher, msg.sender);
-        itemToPrice[cipherId] = price;
+        listings[cipherId] = Listing(msg.sender, price, uri);
+        emit NewListing(msg.sender, cipherId, name, description, price, uri);
         return cipherId;
     }
 
-    /// Looks if the caller is sending enough token to buy the entry. If so, it notifies
-    /// the Medusa network to reencrypt the given cipher ID with the given public key.
-    /// This public key is generated on the client side (TS) and is most often ephemereal.
-    function buyEntry(
+    /// @notice Pay for a listing
+    /// @dev Buyer pays the price for the listing, which can be withdrawn by the seller later; emits an event
+    /// @return requestId The id of the reencryption request associated with the purchase
+    function buyListing(
         uint256 cipherId,
         G1Point calldata buyerPublicKey
     ) external payable returns (uint256) {
-        // uint256 price = itemToPrice[cipherId];
-        // if (msg.value < price) {
+        Listing memory listing = listings[cipherId];
+        if (listing.seller == address(0)) {
+            revert ListingDoesNotExist();
+        }
+
+        // if (msg.value < listing.price) {
         //     revert InsufficentFunds();
         // }
+
+        // if (ERC721(nft).balanceOf(msg.sender) < 1) {
+        //     revert InsufficentFunds();
+        // }
+
+        (bool success, bytes memory check) = nft.call(
+            abi.encodeWithSignature("balanceOf(address)", msg.sender)
+        );
+
+        if (!success || check[0] == 0) {
+            revert InsufficentFunds();
+        }
+
+        _asyncTransfer(listing.seller, msg.value);
         uint256 requestId = oracle.requestReencryption(
             cipherId,
             buyerPublicKey
         );
+        emit NewSale(msg.sender, listing.seller, requestId, cipherId);
         return requestId;
     }
 
-    event EntryDecryption(uint256 indexed requestId, Ciphertext ciphertext);
-
-    /// oracleResult gets called when the Medusa network successfully reencrypted
-    /// the ciphertext to the given public key called in the previous method.
-    /// This contract here simply emits an event so the client can listen on it and
-    /// pick up on the cipher and locally decrypt.
+    /// @inheritdoc IEncryptionClient
     function oracleResult(
         uint256 requestId,
         Ciphertext calldata cipher
     ) external onlyOracle {
-        emit EntryDecryption(requestId, cipher);
+        emit ListingDecryption(requestId, cipher);
+    }
+
+    /// @notice Convenience function to get the public key of the oracle
+    /// @dev This is the public key that sellers should use to encrypt their listing ciphertext
+    /// @dev Note: This feels like a nice abstraction, but it's not strictly necessary
+    function publicKey() external view returns (G1Point memory) {
+        return oracle.distributedKey();
     }
 }

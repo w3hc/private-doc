@@ -6,7 +6,10 @@ async function main() {
   console.log("\nPrivate Doc deployment in progress...") 
   
   const PrivateDoc = await ethers.getContractFactory("PrivateDoc")
-  const privateDoc = await PrivateDoc.deploy("0xf1d5A4481F44fe0818b6E7Ef4A60c0c9b29E3118")
+  const privateDoc = await PrivateDoc.deploy(
+    "0xf1d5A4481F44fe0818b6E7Ef4A60c0c9b29E3118", // Medusa Client
+    "0x5d47d641026d4585b40573410cb5d93e839ca96e" // NFT
+    )
   await privateDoc.deployed();
   console.log("\nPrivateDoc deployed at", privateDoc.address, "✅")  
 
