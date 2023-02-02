@@ -5,7 +5,7 @@ import "@nomiclabs/hardhat-etherscan";
 
 dotenv.config();
 // const { GOERLI_TESTNET_RPC_URL, DEPLOYER_DAO_TESTER_PRIVATE_KEY, ETHERSCAN_API_KEY, OPTIMISM_TESTNET_RPC_URL, ETHERSCAN_OPTIMISM_API_KEY } = process.env;
-const { GOERLI_TESTNET_RPC_URL, DEPLOYER_DAO_TESTER_PRIVATE_KEY, ETHERSCAN_API_KEY, ARBITRUM_TESTNET_RPC_URL } = process.env;
+const { GOERLI_TESTNET_RPC_URL, DEPLOYER_DAO_TESTER_PRIVATE_KEY, ETHERSCAN_API_KEY, ARBITRUM_TESTNET_RPC_URL, ARBISCAN_API_KEY } = process.env;
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -36,7 +36,7 @@ const config: HardhatUserConfig = {
     // },
   }, 
   etherscan: {
-    apiKey: ETHERSCAN_API_KEY,
+    apiKey: ARBISCAN_API_KEY,
     // apiKey: ETHERSCAN_OPTIMISM_API_KEY,
   },
 };
