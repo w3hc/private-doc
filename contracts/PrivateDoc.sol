@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.17;
 
 import {BN254EncryptionOracle as Oracle} from "./medusa/BN254EncryptionOracle.sol";
 import {IEncryptionClient, Ciphertext} from "./medusa/EncryptionOracle.sol";
@@ -9,11 +9,10 @@ import {PullPayment} from "@openzeppelin/contracts/security/PullPayment.sol";
 
 error CallbackNotAuthorized();
 error ListingDoesNotExist();
-error InsufficentFunds();
+error CallerIsNotNftOwner();
 
 struct Listing {
     address seller;
-    uint256 price;
     string uri;
 }
 
@@ -26,14 +25,13 @@ contract PrivateDoc is IEncryptionClient, PullPayment {
     mapping(uint256 => Listing) public listings;
 
     event ListingDecryption(uint256 indexed requestId, Ciphertext ciphertext);
+
     event NewListing(
         address indexed seller,
         uint256 indexed cipherId,
-        string name,
-        string description,
-        uint256 price,
         string uri
     );
+
     event NewSale(
         address indexed buyer,
         address indexed seller,
@@ -58,15 +56,17 @@ contract PrivateDoc is IEncryptionClient, PullPayment {
     /// @return cipherId The id of the ciphertext associated with the new listing
     function createListing(
         Ciphertext calldata cipher,
-        string calldata name,
-        string calldata description,
-        uint256 price,
         string calldata uri
-    ) external returns (uint256) {
-        uint256 cipherId = oracle.submitCiphertext(cipher, msg.sender);
-        listings[cipherId] = Listing(msg.sender, price, uri);
-        emit NewListing(msg.sender, cipherId, name, description, price, uri);
-        return cipherId;
+    ) external returns (uint256 cipherId) {
+        try oracle.submitCiphertext(cipher, msg.sender) returns (
+            uint256 _cipherId
+        ) {
+            listings[cipherId] = Listing(msg.sender, uri);
+            emit NewListing(msg.sender, cipherId, uri);
+            return _cipherId;
+        } catch {
+            require(false, "Call to Medusa oracle failed");
+        }
     }
 
     /// @notice Pay for a listing
@@ -81,20 +81,15 @@ contract PrivateDoc is IEncryptionClient, PullPayment {
             revert ListingDoesNotExist();
         }
 
-        // if (msg.value < listing.price) {
-        //     revert InsufficentFunds();
-        // }
-
         // if (ERC721(nft).balanceOf(msg.sender) < 1) {
         //     revert InsufficentFunds();
         // }
-
         (bool success, bytes memory check) = nft.call(
             abi.encodeWithSignature("balanceOf(address)", msg.sender)
         );
 
         if (!success || check[0] == 0) {
-            revert InsufficentFunds();
+            revert CallerIsNotNftOwner();
         }
 
         _asyncTransfer(listing.seller, msg.value);
