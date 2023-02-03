@@ -11,10 +11,10 @@ error CallbackNotAuthorized();
 error ListingDoesNotExist();
 error CallerIsNotNftOwner();
 
-struct Listing {
-    address seller;
-    string uri;
-}
+// struct Listing {
+//     address seller;
+//     uint256 cipherId;
+// }
 
 contract PrivateDoc is IEncryptionClient, PullPayment {
     /// @notice The Encryption Oracle Instance
@@ -22,7 +22,9 @@ contract PrivateDoc is IEncryptionClient, PullPayment {
     address public nft;
 
     /// @notice A mapping from cipherId to listing
-    mapping(uint256 => Listing) public listings;
+    mapping(string => uint256) public listings;
+    mapping(string => uint256) public requests;
+    mapping(uint256 => Ciphertext) public ciphers;
 
     event ListingDecryption(uint256 indexed requestId, Ciphertext ciphertext);
 
@@ -33,10 +35,10 @@ contract PrivateDoc is IEncryptionClient, PullPayment {
     );
 
     event NewSale(
-        address indexed buyer,
         address indexed seller,
         uint256 requestId,
-        uint256 cipherId
+        uint256 cipherId,
+        string uri
     );
 
     modifier onlyOracle() {
@@ -53,17 +55,15 @@ contract PrivateDoc is IEncryptionClient, PullPayment {
 
     /// @notice Create a new listing
     /// @dev Submits a ciphertext to the oracle, stores a listing, and emits an event
-    /// @return cipherId The id of the ciphertext associated with the new listing
     function createListing(
         Ciphertext calldata cipher,
         string calldata uri
-    ) external returns (uint256 cipherId) {
-        try oracle.submitCiphertext(cipher, msg.sender) returns (
-            uint256 _cipherId
+    ) external {
+        try oracle.submitCiphertext(cipher, bytes("0x"), msg.sender) returns (
+            uint256 cipherId
         ) {
-            listings[cipherId] = Listing(msg.sender, uri);
+            listings[uri] = cipherId;
             emit NewListing(msg.sender, cipherId, uri);
-            return _cipherId;
         } catch {
             require(false, "Call to Medusa oracle failed");
         }
@@ -73,31 +73,32 @@ contract PrivateDoc is IEncryptionClient, PullPayment {
     /// @dev Buyer pays the price for the listing, which can be withdrawn by the seller later; emits an event
     /// @return requestId The id of the reencryption request associated with the purchase
     function buyListing(
-        uint256 cipherId,
+        string memory _uri,
         G1Point calldata buyerPublicKey
-    ) external payable returns (uint256) {
-        Listing memory listing = listings[cipherId];
-        if (listing.seller == address(0)) {
-            revert ListingDoesNotExist();
-        }
+    ) external returns (uint256) {
+        // Listing memory listing = listings[uri];
+        // if (listing.seller == address(0)) {
+        //     revert ListingDoesNotExist();
+        // }
 
         // if (ERC721(nft).balanceOf(msg.sender) < 1) {
         //     revert InsufficentFunds();
         // }
-        (bool success, bytes memory check) = nft.call(
-            abi.encodeWithSignature("balanceOf(address)", msg.sender)
-        );
+        // (bool success, bytes memory check) = nft.call(
+        //     abi.encodeWithSignature("balanceOf(address)", msg.sender)
+        // );
 
-        if (!success || check[0] == 0) {
-            revert CallerIsNotNftOwner();
-        }
+        // if (!success || check[0] == 0) {
+        //     revert CallerIsNotNftOwner();
+        // }
 
-        _asyncTransfer(listing.seller, msg.value);
+        // _asyncTransfer(listing.seller, msg.value);
         uint256 requestId = oracle.requestReencryption(
-            cipherId,
+            listings[_uri],
             buyerPublicKey
         );
-        emit NewSale(msg.sender, listing.seller, requestId, cipherId);
+        // emit NewSale(msg.sender, requestId, listings[_uri], _uri);
+        requests[_uri] = requestId;
         return requestId;
     }
 
@@ -107,6 +108,7 @@ contract PrivateDoc is IEncryptionClient, PullPayment {
         Ciphertext calldata cipher
     ) external onlyOracle {
         emit ListingDecryption(requestId, cipher);
+        ciphers[requestId] = cipher;
     }
 
     /// @notice Convenience function to get the public key of the oracle

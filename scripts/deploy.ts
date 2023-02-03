@@ -1,36 +1,11 @@
-import { ethers, network } from "hardhat";
+import { ethers, network, artifacts } from "hardhat";
 const hre = require("hardhat");
 const fs = require('fs');
 const path = require('path');
 
+// https://stackoverflow.com/questions/18052762/remove-directory-which-is-not-empty
+
 async function main() {
-
-  fs.rmdir("./cache", (err:any) => {
-
-    if (err) {
-    return console.log("error occurred in deleting directory", err);
-    }
-
-    console.log("Directory deleted successfully");
-  });
-
-  fs.rmdir("./artifacts", (err:any) => {
-
-    if (err) {
-    return console.log("error occurred in deleting directory", err);
-    }
-
-    console.log("Directory deleted successfully");
-  });
-
-  fs.rmdir("./typechain-types", (err:any) => {
-
-    if (err) {
-    return console.log("error occurred in deleting directory", err);
-    }
-
-    console.log("Directory deleted successfully");
-  });
 
   console.log("\nPrivate Doc deployment in progress...") 
 
@@ -58,6 +33,7 @@ async function main() {
   } catch (error) {
     console.error(error);
   }
+  fs.writeFileSync('scripts/PrivateDocAbi.json', JSON.stringify(artifacts.readArtifactSync('PrivateDoc').abi, null, 2));
 }
 
 main().catch((error) => {
