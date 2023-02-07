@@ -5,20 +5,19 @@ import {BN254EncryptionOracle as Oracle} from "./medusa/BN254EncryptionOracle.so
 import {IEncryptionClient, Ciphertext} from "./medusa/EncryptionOracle.sol";
 import {G1Point} from "./medusa/Bn128.sol";
 import {PullPayment} from "@openzeppelin/contracts/security/PullPayment.sol";
-// import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
 error CallbackNotAuthorized();
 error ListingDoesNotExist();
 error CallerIsNotNftOwner();
 
-// struct Listing {
-//     address seller;
-//     uint256 cipherId;
-// }
+interface ERC721 {
+    function balanceOf(address owner) external view returns (uint256 balance);
+}
 
 contract PrivateDoc is IEncryptionClient, PullPayment {
     /// @notice The Encryption Oracle Instance
     Oracle public oracle;
+    /// @notice The DAO membership NFT Instance
     address public nft;
 
     /// @notice A mapping from cipherId to listing
@@ -59,7 +58,7 @@ contract PrivateDoc is IEncryptionClient, PullPayment {
         Ciphertext calldata cipher,
         string calldata uri
     ) external {
-        try oracle.submitCiphertext(cipher, bytes("0x"), msg.sender) returns (
+        try oracle.submitCiphertext(cipher, "0x", msg.sender) returns (
             uint256 cipherId
         ) {
             listings[uri] = cipherId;
@@ -69,21 +68,22 @@ contract PrivateDoc is IEncryptionClient, PullPayment {
         }
     }
 
-    /// @notice Pay for a listing
-    /// @dev Buyer pays the price for the listing, which can be withdrawn by the seller later; emits an event
-    /// @return requestId The id of the reencryption request associated with the purchase
+    /// @notice Any holder of one the NFTs can decrypt
+    /// @dev Triggers Medusa oracle's requestReencryption and returns requestId
+    /// @return requestId The id of the reencryption request associated with the ownership verification
     function buyListing(
         string memory _uri,
         G1Point calldata buyerPublicKey
     ) external returns (uint256) {
-        // Listing memory listing = listings[uri];
-        // if (listing.seller == address(0)) {
-        //     revert ListingDoesNotExist();
-        // }
+        if (listings[_uri] == 0) {
+            revert ListingDoesNotExist();
+        }
 
-        // if (ERC721(nft).balanceOf(msg.sender) < 1) {
-        //     revert InsufficentFunds();
-        // }
+        require(
+            ERC721(nft).balanceOf(msg.sender) > 0,
+            "Caller's NFT balance is 0"
+        );
+
         // (bool success, bytes memory check) = nft.call(
         //     abi.encodeWithSignature("balanceOf(address)", msg.sender)
         // );
@@ -92,12 +92,11 @@ contract PrivateDoc is IEncryptionClient, PullPayment {
         //     revert CallerIsNotNftOwner();
         // }
 
-        // _asyncTransfer(listing.seller, msg.value);
         uint256 requestId = oracle.requestReencryption(
             listings[_uri],
             buyerPublicKey
         );
-        // emit NewSale(msg.sender, requestId, listings[_uri], _uri);
+        emit NewSale(msg.sender, requestId, listings[_uri], _uri);
         requests[_uri] = requestId;
         return requestId;
     }
