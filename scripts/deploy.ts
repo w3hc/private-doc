@@ -1,9 +1,6 @@
 import { ethers, network, artifacts } from "hardhat";
 const hre = require("hardhat");
 const fs = require('fs');
-const path = require('path');
-
-// https://stackoverflow.com/questions/18052762/remove-directory-which-is-not-empty
 
 async function main() {
 
@@ -33,10 +30,11 @@ async function main() {
   } catch (error) {
     console.error(error);
   }
-  fs.writeFileSync('scripts/PrivateDocAbi.json', JSON.stringify(artifacts.readArtifactSync('PrivateDoc').abi, null, 2));
+  
+  fs.writeFileSync('PrivateDocAbi.json', JSON.stringify(artifacts.readArtifactSync('PrivateDoc').abi, null, 2));
 }
 
 main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+  console.error(error)
+  process.exitCode = 1
+})
