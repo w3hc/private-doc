@@ -4,10 +4,10 @@ Medusa client contract for [Gov Proposal Editor](https://github.com/w3hc/gov-pro
 
 ## Deployment
 
-PrivateDoc deployed at [0x311B7256C792B548481F0b169dAF0374149145b4](https://goerli.arbiscan.io/address/0x311B7256C792B548481F0b169dAF0374149145b4) ✅
+PrivateDoc deployed at [0x0eEE41a9efC4aaCfAF68B647b7d0c61F45047010](https://goerli.arbiscan.io/address/0x0eEE41a9efC4aaCfAF68B647b7d0c61F45047010#code) ✅
 
 ```sh
-npx hardhat run scripts/deploy.ts --network arbitrum-goerli
+npm run clear && npx hardhat run scripts/deploy.ts --network arbitrum-goerli
 ```
 
 Verifying NFT ownership (`balanceOf`):
